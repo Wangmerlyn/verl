@@ -132,27 +132,21 @@ class AsyncEngine(sglang.srt.entrypoints.engine.Engine):
         # default to use dummy load format, which need to reload weights in first time
         self._need_reload = True
 
-    async def release_memory_occupation(self, tags: Optional[list[str]] = None):
+    async def release_memory_occupation(self):
         """Release GPU occupation temporarily."""
-        if tags is None:
-            obj = ReleaseMemoryOccupationReqInput()
-        else:
-            obj = ReleaseMemoryOccupationReqInput(tags=tags)
+        obj = ReleaseMemoryOccupationReqInput()
         return await self.tokenizer_manager.release_memory_occupation(obj, None)
 
-    async def resume_memory_occupation(self, tags: Optional[list[str]] = None):
+    async def resume_memory_occupation(self):
         """Resume GPU occupation."""
+
         # because __init__ is a sync method, it can not call the async release_memory_occupation
         # have to move release_memory_occupation from __init__ to here
-        # For multi-stage awake, we run release weight and kv_cache when we resume weights for the first time.
         if self._need_reload:
             await self.release_memory_occupation()
             self._need_reload = False
 
-        if tags is None:
-            obj = ResumeMemoryOccupationReqInput()
-        else:
-            obj = ResumeMemoryOccupationReqInput(tags=tags)
+        obj = ResumeMemoryOccupationReqInput()
         return await self.tokenizer_manager.resume_memory_occupation(obj, None)
 
     async def update_weights_from_tensor(

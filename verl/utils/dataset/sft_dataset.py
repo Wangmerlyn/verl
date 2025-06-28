@@ -18,11 +18,10 @@ SFT dataset
 Each parquet file contains
 """
 
-from typing import Union
+from typing import List, Union
 
 import pandas as pd
 import torch
-from omegaconf.listconfig import ListConfig
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
@@ -39,7 +38,7 @@ class SFTDataset(Dataset):
         config (OmegaConf): the data config
     """
 
-    def __init__(self, parquet_files: Union[str, ListConfig], tokenizer, config):
+    def __init__(self, parquet_files: Union[str, List[str]], tokenizer, config):
         prompt_key = config.get("prompt_key", "prompt")
         prompt_dict_keys = config.get("prompt_dict_keys", None)
         response_key = config.get("response_key", "response")
@@ -52,7 +51,7 @@ class SFTDataset(Dataset):
         self.truncation = truncation
         self.use_shm = use_shm
 
-        if not isinstance(parquet_files, ListConfig):
+        if not isinstance(parquet_files, List):
             parquet_files = [parquet_files]
 
         self.parquet_files = parquet_files

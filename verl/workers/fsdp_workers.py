@@ -107,7 +107,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         if not torch.distributed.is_initialized():
             rank = int(os.environ.get("RANK", 0))
             world_size = int(os.environ.get("WORLD_SIZE", 1))
-            torch.distributed.init_process_group(backend=f"cpu:gloo,{get_device_name()}:{get_nccl_backend()}", rank=rank, world_size=world_size, init_method=os.environ.get("DIST_INIT_METHOD", None))
+            torch.distributed.init_process_group(backend=f"cpu:gloo,{get_device_name()}:{get_nccl_backend()}", rank=rank, world_size=world_size)
 
         # build device mesh for FSDP
         world_size = torch.distributed.get_world_size()
@@ -484,7 +484,6 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 full_params="hf" in self.config.rollout.load_format,
                 device_mesh=rollout_device_mesh,
                 offload_param=self._is_offload_param,
-                multi_stage_wake_up=self.config.rollout.multi_stage_wake_up,
             )
             log_gpu_memory_usage("After building sharding manager", logger=logger)
 
@@ -583,7 +582,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 optimizer=self.actor.actor_optimizer,
                 lr_scheduler=self.actor_lr_scheduler,
                 processing_class=self.processor if self.processor is not None else self.tokenizer,
-                checkpoint_config=self.config.actor.checkpoint,
+                checkpoint_contents=self.config.actor.checkpoint,
             )
 
         if not self._is_actor and self._is_rollout:
@@ -596,7 +595,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
                 optimizer=None,
                 lr_scheduler=None,
                 processing_class=self.processor if self.processor is not None else self.tokenizer,
-                checkpoint_config=checkpoint_contents,
+                checkpoint_contents=checkpoint_contents,
             )
 
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
@@ -833,7 +832,7 @@ class CriticWorker(Worker, DistProfilerExtension):
         import torch.distributed
 
         if not torch.distributed.is_initialized():
-            torch.distributed.init_process_group(backend=get_nccl_backend(), init_method=os.environ.get("DIST_INIT_METHOD", None))
+            torch.distributed.init_process_group(backend=get_nccl_backend())
         self.config = config
 
         # build device mesh for Ulysses Sequence Parallel
@@ -1074,7 +1073,7 @@ class CriticWorker(Worker, DistProfilerExtension):
             optimizer=self.critic_optimizer,
             lr_scheduler=self.critic_lr_scheduler,
             processing_class=self.processor if self.processor is not None else self.tokenizer,
-            checkpoint_config=self.config.checkpoint,
+            checkpoint_contents=self.config.checkpoint,
         )
 
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
@@ -1182,7 +1181,7 @@ class RewardModelWorker(Worker, DistProfilerExtension):
         import torch.distributed
 
         if not torch.distributed.is_initialized():
-            torch.distributed.init_process_group(backend=get_nccl_backend(), init_method=os.environ.get("DIST_INIT_METHOD", None))
+            torch.distributed.init_process_group(backend=get_nccl_backend())
         self.config = config
 
         # build device mesh for Ulysses Sequence Parallel

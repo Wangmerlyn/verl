@@ -201,7 +201,7 @@ actor_rollout_ref:
       # KL divergence penalty coefficient
       ppo_kl_coef: 0.1
 
-    # Constant C in Dual-clip PPO; clips when advantage < 0 and ratio > C
+    # Constant C in Dual-clip PPO; clips when advantage < -C
     clip_ratio_c: 3.0
 
     # Loss aggregation mode: "token-mean", "seq-mean-token-sum", or "seq-mean-token-mean"
@@ -464,9 +464,6 @@ actor_rollout_ref:
 
     # number of responses (i.e. num sample times). > 1 for grpo
     n: 1
-
-    # Whether to wake up inference engine in multi-stage. (Wake up model weights first, then resume kv cache)
-    multi_stage_wake_up: false
 
     # Extra inference engine arguments (vllm, sglang).
     engine_kwargs:
@@ -971,12 +968,6 @@ trainer:
 
   # Save frequency (by iteration) for model checkpoints
   save_freq: -1
-
-  # Save frequency (by epoch) for model checkpoints
-  save_after_epochs: -1
-
-  # Save model checkpoints only when validation metric improves
-  save_best_val_metric: None
 
   # Resume mode: "auto", "disable", or "resume_path"
   # "auto": resume from last checkpoint if available

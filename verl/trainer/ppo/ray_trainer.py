@@ -50,7 +50,7 @@ from verl.trainer.ppo.metric_utils import (
     process_validation_metrics,
 )
 from verl.trainer.ppo.reward import compute_reward, compute_reward_async
-from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path
+from verl.utils.checkpoint.checkpoint_manager import BaseCheckpointManager, find_latest_ckpt_path
 from verl.utils.debug import marked_timer
 from verl.utils.metric import (
     reduce_metrics,
@@ -803,17 +803,14 @@ class RayPPOTrainer:
                 worker_group=self.actor_rollout_wg,
             )
 
-    def _save_checkpoint(self, save_name=None):
-        from verl.utils.fs import local_mkdir_safe
-
+    def _save_checkpoint(self):
         # path: given_path + `/global_step_{global_steps}` + `/actor`
-        save_name = f"global_step_{self.global_steps}" if save_name is None else save_name
-        local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, save_name)
+        local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
 
         print(f"local_global_step_folder: {local_global_step_folder}")
         actor_local_path = os.path.join(local_global_step_folder, "actor")
 
-        actor_remote_path = None if self.config.trainer.default_hdfs_dir is None else os.path.join(self.config.trainer.default_hdfs_dir, save_name, "actor")
+        actor_remote_path = None if self.config.trainer.default_hdfs_dir is None else os.path.join(self.config.trainer.default_hdfs_dir, f"global_step_{self.global_steps}", "actor")
 
         remove_previous_ckpt_in_save = self.config.trainer.get("remove_previous_ckpt_in_save", False)
         if remove_previous_ckpt_in_save:
@@ -825,11 +822,11 @@ class RayPPOTrainer:
 
         if self.use_critic:
             critic_local_path = os.path.join(local_global_step_folder, "critic")
-            critic_remote_path = None if self.config.trainer.default_hdfs_dir is None else os.path.join(self.config.trainer.default_hdfs_dir, save_name, "critic")
+            critic_remote_path = None if self.config.trainer.default_hdfs_dir is None else os.path.join(self.config.trainer.default_hdfs_dir, f"global_step_{self.global_steps}", "critic")
             self.critic_wg.save_checkpoint(critic_local_path, critic_remote_path, self.global_steps, max_ckpt_to_keep=max_critic_ckpt_to_keep)
 
         # save dataloader
-        local_mkdir_safe(local_global_step_folder)
+        BaseCheckpointManager.local_mkdir(local_global_step_folder)
         dataloader_local_path = os.path.join(local_global_step_folder, "data.pt")
         dataloader_state_dict = self.train_dataloader.state_dict()
         torch.save(dataloader_state_dict, dataloader_local_path)
@@ -940,10 +937,8 @@ class RayPPOTrainer:
         progress_bar = tqdm(total=self.total_training_steps, initial=self.global_steps, desc="Training Progress")
 
         # we start from step 1
-        per_epoch_steps = len(self.train_dataloader)
         self.global_steps += 1
         last_val_metrics = None
-        best_val_metrics = None
 
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
@@ -1157,18 +1152,8 @@ class RayPPOTrainer:
                             if is_last_step:
                                 last_val_metrics = val_metrics
                         metrics.update(val_metrics)
-                        if self.config.trainer.save_best_val_metric is not None:
-                            current_metric = val_metrics.get(self.config.trainer.save_best_val_metric)
-                            if current_metric is not None and (best_val_metrics is None or current_metric > best_val_metrics):
-                                best_val_metrics = current_metric
-                                with marked_timer("save_checkpoint", timing_raw, color="green"):
-                                    self._save_checkpoint(save_name=f"best_val_step_{self.global_steps}")
 
-                    is_save_frequency = self.global_steps % self.config.trainer.save_freq == 0
-                    is_save_after_epoch = self.config.trainer.save_after_epochs > 0 and self.global_steps % (per_epoch_steps * self.config.trainer.save_after_epochs) == 0
-
-                    should_save = self.config.trainer.save_freq > 0 and (is_last_step or is_save_frequency or is_save_after_epoch)
-                    if should_save:
+                    if self.config.trainer.save_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.save_freq == 0):
                         with marked_timer("save_checkpoint", timing_raw, color="green"):
                             self._save_checkpoint()
 
